@@ -24,6 +24,8 @@ RUN pip install --upgrade pip && \
 
 # Copy application code
 COPY ./app /app/app
+COPY ./alembic /app/alembic
+COPY ./alembic.ini /app/alembic.ini
 
 # Create non-root user
 RUN adduser --disabled-password --gecos '' appuser && \
