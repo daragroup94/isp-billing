@@ -70,3 +70,11 @@ coverage.xml
 
 # Alembic
 alembic/versions/*.pyc
+
+# Node / Frontend
+node_modules/
+frontend/node_modules/
+.next/
+out/
+dist/
+build/
