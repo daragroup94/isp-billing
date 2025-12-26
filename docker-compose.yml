@@ -1,3 +1,6 @@
+# docker-compose.complete.yml
+# Complete stack: PostgreSQL + Redis + Backend + Frontend
+
 services:
   # PostgreSQL Database
   postgres:
@@ -45,17 +48,16 @@ services:
     container_name: isp-billing-backend
     restart: always
     ports:
-      - "8000:8000"  # Tambahkan ini
+      - "8000:8000"
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-ispbilling}:${POSTGRES_PASSWORD:-changeme123}@postgres:5432/${POSTGRES_DB:-ispbilling}
       REDIS_URL: redis://:${REDIS_PASSWORD:-changeme123}@redis:6379/0
       SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-this-in-production}
       ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 30
-      ENVIRONMENT: ${ENVIRONMENT:-development}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-["http://localhost:3000","https://app.access.daragroup.cloud","https://api.access.daragroup.cloud"]}
       TZ: Asia/Jakarta
-    volumes:
-      - ./backend/app:/app/app
     depends_on:
       postgres:
         condition: service_healthy
@@ -77,11 +79,39 @@ services:
       - "traefik.http.routers.isp-billing-api-secure.service=isp-billing-api"
       # Service
       - "traefik.http.services.isp-billing-api.loadbalancer.server.port=8000"
-      # CORS Middleware
-      - "traefik.http.middlewares.isp-billing-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,PATCH,OPTIONS"
-      - "traefik.http.middlewares.isp-billing-cors.headers.accesscontrolalloworiginlist=*"
-      - "traefik.http.middlewares.isp-billing-cors.headers.accesscontrolmaxage=100"
-      - "traefik.http.middlewares.isp-billing-cors.headers.addvaryheader=true"
+
+  # Frontend Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: https://api.access.daragroup.cloud
+    container_name: isp-billing-frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: https://api.access.daragroup.cloud
+      NODE_ENV: production
+    depends_on:
+      - backend
+    networks:
+      - my-net
+    labels:
+      - "traefik.enable=true"
+      # HTTP
+      - "traefik.http.routers.isp-billing-frontend.entrypoints=web"
+      - "traefik.http.routers.isp-billing-frontend.rule=Host(`app.access.daragroup.cloud`)"
+      - "traefik.http.routers.isp-billing-frontend.middlewares=https-redirect"
+      # HTTPS
+      - "traefik.http.routers.isp-billing-frontend-secure.entrypoints=websecure"
+      - "traefik.http.routers.isp-billing-frontend-secure.rule=Host(`app.access.daragroup.cloud`)"
+      - "traefik.http.routers.isp-billing-frontend-secure.tls=true"
+      - "traefik.http.routers.isp-billing-frontend-secure.tls.certresolver=cloudflare"
+      - "traefik.http.routers.isp-billing-frontend-secure.service=isp-billing-frontend"
+      # Service
+      - "traefik.http.services.isp-billing-frontend.loadbalancer.server.port=3000"
 
 volumes:
   postgres-data:

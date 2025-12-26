@@ -2,21 +2,19 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { authAPI } from '@/lib/api';
-import { User } from '@/types';
+import { authApi } from '@/lib/api';
 
 interface AuthContextType {
-  user: User | null;
+  user: any;
   loading: boolean;
-  login: (username: string, password: string) => Promise<void>;
+  login: (credentials: any) => Promise<void>;
   logout: () => void;
-  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -26,53 +24,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const checkAuth = async () => {
     try {
-      const token = localStorage.getItem('access_token');
-      if (token) {
-        const userData = await authAPI.getCurrentUser();
-        setUser(userData);
+      if (typeof window !== 'undefined') {
+        const token = localStorage.getItem('token');
+        if (token) {
+          const userData = await authApi.getMe();
+          setUser(userData);
+        }
       }
     } catch (error) {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('user');
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token');
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const login = async (username: string, password: string) => {
-    try {
-      const response = await authAPI.login(username, password);
-      localStorage.setItem('access_token', response.access_token);
-      
-      const userData = await authAPI.getCurrentUser();
-      setUser(userData);
-      localStorage.setItem('user', JSON.stringify(userData));
-      
-      router.push('/dashboard');
-    } catch (error: any) {
-      throw new Error(error.response?.data?.detail || 'Login failed');
+  const login = async (credentials: any) => {
+    const response = await authApi.login(credentials);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('token', response.access_token);
     }
+    const userData = await authApi.getMe();
+    setUser(userData);
+    router.push('/dashboard');
   };
 
   const logout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('user');
-    setUser(null);
-    router.push('/login');
-  };
-
-  const refreshUser = async () => {
-    try {
-      const userData = await authAPI.getCurrentUser();
-      setUser(userData);
-      localStorage.setItem('user', JSON.stringify(userData));
-    } catch (error) {
-      logout();
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('token');
     }
+    setUser(null);
+    router.push('/auth/login');
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,99 +1,115 @@
-'use client';
-
+// hooks/useCustomers.ts
 import { useState, useEffect } from 'react';
-import { customersAPI } from '@/lib/api';
-import { Customer } from '@/types';
+import { customerApi } from '@/lib/api';
+import type { Customer, CustomerFilters } from '@/types';
 
-interface UseCustomersParams {
-  skip?: number;
-  limit?: number;
-  search?: string;
-  status?: string;
-  package_id?: number;
-}
-
-export function useCustomers(params: UseCustomersParams = {}) {
+export function useCustomers(filters?: CustomerFilters) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [count, setCount] = useState({
-    total: 0,
-    active: 0,
-    suspended: 0,
-    inactive: 0,
-    terminated: 0,
-  });
-
-  useEffect(() => {
-    fetchCustomers();
-    fetchCount();
-  }, [params.skip, params.limit, params.search, params.status, params.package_id]);
 
   const fetchCustomers = async () => {
     try {
       setLoading(true);
-      const data = await customersAPI.getList(params);
+      const data = await customerApi.getAll(filters);
       setCustomers(data);
+      setError(null);
     } catch (err: any) {
-      setError(err.message || 'Failed to fetch customers');
+      setError(err.response?.data?.detail || 'Failed to fetch customers');
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchCount = async () => {
+  useEffect(() => {
+    fetchCustomers();
+  }, [JSON.stringify(filters)]);
+
+  const createCustomer = async (data: Partial<Customer>) => {
     try {
-      const data = await customersAPI.getCount(params.status);
-      setCount(data);
+      const newCustomer = await customerApi.create(data);
+      setCustomers([newCustomer, ...customers]);
+      return newCustomer;
     } catch (err: any) {
-      console.error('Failed to fetch count:', err);
+      throw new Error(err.response?.data?.detail || 'Failed to create customer');
     }
   };
 
-  const createCustomer = async (data: any) => {
-    const result = await customersAPI.create(data);
-    await fetchCustomers();
-    await fetchCount();
-    return result;
-  };
-
-  const updateCustomer = async (id: number, data: any) => {
-    const result = await customersAPI.update(id, data);
-    await fetchCustomers();
-    await fetchCount();
-    return result;
+  const updateCustomer = async (id: number, data: Partial<Customer>) => {
+    try {
+      const updated = await customerApi.update(id, data);
+      setCustomers(customers.map(c => c.id === id ? updated : c));
+      return updated;
+    } catch (err: any) {
+      throw new Error(err.response?.data?.detail || 'Failed to update customer');
+    }
   };
 
   const deleteCustomer = async (id: number) => {
-    await customersAPI.delete(id);
-    await fetchCustomers();
-    await fetchCount();
+    try {
+      await customerApi.delete(id);
+      setCustomers(customers.filter(c => c.id !== id));
+    } catch (err: any) {
+      throw new Error(err.response?.data?.detail || 'Failed to delete customer');
+    }
   };
 
   const suspendCustomer = async (id: number) => {
-    const result = await customersAPI.suspend(id);
-    await fetchCustomers();
-    await fetchCount();
-    return result;
+    try {
+      const updated = await customerApi.suspend(id);
+      setCustomers(customers.map(c => c.id === id ? updated : c));
+      return updated;
+    } catch (err: any) {
+      throw new Error(err.response?.data?.detail || 'Failed to suspend customer');
+    }
   };
 
   const activateCustomer = async (id: number) => {
-    const result = await customersAPI.activate(id);
-    await fetchCustomers();
-    await fetchCount();
-    return result;
+    try {
+      const updated = await customerApi.activate(id);
+      setCustomers(customers.map(c => c.id === id ? updated : c));
+      return updated;
+    } catch (err: any) {
+      throw new Error(err.response?.data?.detail || 'Failed to activate customer');
+    }
   };
 
   return {
     customers,
-    count,
     loading,
     error,
+    refetch: fetchCustomers,
     createCustomer,
     updateCustomer,
     deleteCustomer,
     suspendCustomer,
     activateCustomer,
-    refresh: fetchCustomers,
   };
+}
+
+export function useCustomer(id: number) {
+  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchCustomer = async () => {
+      try {
+        setLoading(true);
+        const data = await customerApi.getById(id);
+        setCustomer(data);
+        setError(null);
+      } catch (err: any) {
+        setError(err.response?.data?.detail || 'Failed to fetch customer');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (id) {
+      fetchCustomer();
+    }
+  }, [id]);
+
+  return { customer, loading, error };
 }
